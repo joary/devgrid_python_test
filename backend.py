@@ -1,6 +1,7 @@
 import sqlite3, re, os
-from numpy import array, fromstring
-
+from numpy import array, fromstring, mean
+from datetime import datetime
+from sklearn.cluster import MeanShift, estimate_bandwidth
 # TODO tratar os erros
 
 def validate_sensor_data(data_str):
@@ -49,6 +50,7 @@ class storage():
 			self.record_cnt = c.execute("SELECT COUNT(*) FROM sensor_data").fetchone()[0]
 		else:
 			self.conn = sqlite3.connect(database)
+			self.record_cnt  = 0;
 	
 	def setup_db(self):
 		c = self.conn.cursor()
@@ -62,35 +64,93 @@ class storage():
 			LinePhase REAL, \
 			Peaks BLOB, \
 			FFT BLOB, \
-			Hz REAL \
+			Hz REAL, \
+			InsertTimestamp TEXT, \
+			Label REAL \
 			);''')
 		self.conn.commit()
 		self.conn.close()
 		
 	def record_sensor_info(self, D):
 		c = self.conn.cursor()
-		sql_cmd = "INSERT INTO sensor_data VALUES (?,?,?,?,?,?,?,?,?,?)"
+		sql_cmd = "INSERT INTO sensor_data ( \
+			devid, PowerActive, PowerReactive, PowerAppearent, LineCurrent,\
+			LineVoltage, LinePhase, Peaks, FFT, Hz, InsertTimestamp) \
+			VALUES (?,?,?,?,?,?,?,?,?,?,?)"
+
 		peaks = D['peaks'].tostring()
 		fft_c = D['fft'].tostring()
+		ts = datetime.now().isoformat()
 		c.execute(sql_cmd, (D['devid'], D['active_power'], D['reactive_power'], 
 			D['appearent_power'], D['current_line'], D['voltage_line'], D['phase_line'],
-			peaks, fft_c, D['freq']));
+			peaks, fft_c, D['freq'], ts));
 		self.conn.commit()
-		
 		self.record_cnt += 1;
 		
-		if(self.record_cnt % 1000 == 0):
-			dump_results();
+	def get_n_records(self):
+		return self.record_cnt;
 
 	def get_sensor_data(self, type_s):
 		c = self.conn.cursor()
-		sql_cmd = "SELECT %s from sensor_data" % (type_s)
-		ret = c.execute(sql_cmd);
+		sql_cmd = "SELECT %s from sensor_data ORDER BY InsertTimestamp DESC \
+		LIMIT 1000" % (type_s)
+		ret = c.execute(sql_cmd).fetchall();
 		if type_s in ['Peaks', 'FFT']:
 			data = [fromstring(i[0]) for i in ret]
 		else:
 			data = [i[0] for i in ret]
 		return data;
+	
+	def set_meas_labels(self, ids, labels):
+		if(len(ids) != len(labels)):
+			print("Id and label vector must have the same length")
+			return -1;
+		
+		sql_cmd = "UPDATE sensor_data SET Label = {} WHERE ROWID = {}";
+		c = self.conn.cursor()
+		c.execute("BEGIN TRANSACTION");
+		for i in range(len(ids)):
+			ret = c.execute(sql_cmd.format(labels[i], ids[i]));
+			#print(sql_cmd.format(labels[i], ids[i]))
+		c.execute("END TRANSACTION");
+
+	def get_cluster_input_data(self):
+		sql_cmd = "SELECT rowid, PowerActive, PowerReactive, PowerAppearent, \
+			LineCurrent, LineVoltage, Peaks \
+			FROM sensor_data ORDER BY InsertTimestamp DESC LIMIT 1000"
+		c = self.conn.cursor()
+		info = c.execute(sql_cmd).fetchall();
+		
+		ids = [i[0] for i in info];
+		# Get usefull data from sql request:
+		# Skip the id and group the real vaules, 
+		# Convert blob data to list and get just the first 3 transients
+		data = [list(i[1:-1]) + list(fromstring(i[-1])[0:3]) for i in info]
+		return (ids, data); 
+
+	def calculate_cluster(self):
+		(ids, data) = self.get_cluster_input_data();
+		
+		bandwidth = estimate_bandwidth(data, quantile=0.2, n_samples=200)
+		ms = MeanShift(bandwidth=bandwidth, cluster_all=False, bin_seeding=True)
+		labels = ms.fit_predict(data)
+		
+		self.set_meas_labels(ids, list(labels));
+		
+		return (ids, labels)
+		
+	def get_n_events_in_cluster(self, cluster):
+		c = self.conn.cursor()
+		sql_cmd = "SELECT COUNT(*) FROM sensor_data WHERE Label={}".format(cluster);
+		return c.execute(sql_cmd).fetchone()[0]
+
+	def get_cluster_active_power_average(self, cluster):
+		c = self.conn.cursor()
+		sql_cmd = "SELECT PowerActive FROM sensor_data WHERE Label={}".format(cluster);
+		power = c.execute(sql_cmd).fetchall();
+		#print(power)
+		return mean(power);
+
 
 	def __end__(self):
 		self.conn.close()
