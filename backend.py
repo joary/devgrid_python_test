@@ -40,20 +40,17 @@ def validate_sensor_data(data_str):
 	return ret;
 
 class storage():
-	record_cnt = 0;
-
-	def __init__(self, database):
-		# Check if the file exists
-		if(os.path.isfile(database)):
-			self.conn = sqlite3.connect(database)
-			c = self.conn.cursor()
-			self.record_cnt = c.execute("SELECT COUNT(*) FROM sensor_data").fetchone()[0]
-		else:
-			self.conn = sqlite3.connect(database)
-			self.record_cnt  = 0;
+	def __init__(self, app):
+		self.record_cnt = 0;
+		self.id_db_open = False;
+		self.app = app;
 	
-	def setup_db(self):
+	def init_db(self):
+		''' Function to create and initialize database
+		This functino should run only once at the service deployment'''
+		self.conn = sqlite3.connect(self.app.config['DATABASE'])
 		c = self.conn.cursor()
+		c.execute('''DROP TABLE sensor_data''');
 		c.execute('''CREATE TABLE sensor_data (\
 			devid INTEGER, \
 			PowerActive REAL, \
@@ -70,9 +67,16 @@ class storage():
 			);''')
 		self.conn.commit()
 		self.conn.close()
-		
+
+	def get_db_cursor(self):
+		''' Return a cursor to the configured'''
+		if not self.id_db_open:
+			self.conn = sqlite3.connect(self.app.config['DATABASE']);
+			self.is_db_open = True;
+		return self.conn.cursor()
+
 	def record_sensor_info(self, D):
-		c = self.conn.cursor()
+		c = self.get_db_cursor()
 		sql_cmd = "INSERT INTO sensor_data ( \
 			devid, PowerActive, PowerReactive, PowerAppearent, LineCurrent,\
 			LineVoltage, LinePhase, Peaks, FFT, Hz, InsertTimestamp) \
@@ -91,7 +95,7 @@ class storage():
 		return self.record_cnt;
 
 	def get_sensor_data(self, type_s):
-		c = self.conn.cursor()
+		c = self.get_db_cursor()
 		sql_cmd = "SELECT %s from sensor_data ORDER BY InsertTimestamp DESC \
 		LIMIT 1000" % (type_s)
 		ret = c.execute(sql_cmd).fetchall();
@@ -107,7 +111,7 @@ class storage():
 			return -1;
 		
 		sql_cmd = "UPDATE sensor_data SET Label = {} WHERE ROWID = {}";
-		c = self.conn.cursor()
+		c = self.get_db_cursor()
 		c.execute("BEGIN TRANSACTION");
 		for i in range(len(ids)):
 			ret = c.execute(sql_cmd.format(labels[i], ids[i]));
@@ -118,7 +122,7 @@ class storage():
 		sql_cmd = "SELECT rowid, PowerActive, PowerReactive, PowerAppearent, \
 			LineCurrent, LineVoltage, Peaks \
 			FROM sensor_data ORDER BY InsertTimestamp DESC LIMIT 1000"
-		c = self.conn.cursor()
+		c = self.get_db_cursor()
 		info = c.execute(sql_cmd).fetchall();
 		
 		ids = [i[0] for i in info];
@@ -140,17 +144,16 @@ class storage():
 		return (ids, labels)
 		
 	def get_n_events_in_cluster(self, cluster):
-		c = self.conn.cursor()
+		c = self.get_db_cursor()
 		sql_cmd = "SELECT COUNT(*) FROM sensor_data WHERE Label={}".format(cluster);
 		return c.execute(sql_cmd).fetchone()[0]
 
 	def get_cluster_active_power_average(self, cluster):
-		c = self.conn.cursor()
+		c = self.get_db_cursor()
 		sql_cmd = "SELECT PowerActive FROM sensor_data WHERE Label={}".format(cluster);
 		power = c.execute(sql_cmd).fetchall();
 		#print(power)
 		return mean(power);
-
 
 	def __end__(self):
 		self.conn.close()

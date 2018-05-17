@@ -1,8 +1,15 @@
 from flask import Flask, request
 import backend, json
 app = Flask(__name__)
+app.config['DATABASE'] = 'database.db';
 
-S = backend.storage('database.db')
+S = backend.storage(app)
+
+@app.cli.command()
+def initdb():
+	"""Initialize the database."""
+	S.init_db();
+	print('Database Initialized')
 
 @app.route("/")
 def hello():
