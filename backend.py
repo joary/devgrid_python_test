@@ -1,5 +1,5 @@
 import sqlite3, re, os
-from numpy import array, fromstring, mean
+from numpy import array, frombuffer, mean
 from datetime import datetime
 from sklearn.cluster import MeanShift, estimate_bandwidth
 
@@ -92,7 +92,7 @@ class storage():
 		try:
 			self.conn.cursor()
 		except sqlite3.ProgrammingError:
-			print('Opening Database', self.app.config['DATABASE'])
+			#print('Opening Database', self.app.config['DATABASE'])
 			self.conn = sqlite3.connect(self.app.config['DATABASE']);
 		return self.conn.cursor();
 
@@ -145,11 +145,11 @@ class storage():
 		
 		sql_cmd = "UPDATE sensor_data SET Label = {} WHERE ROWID = {}";
 		c = self.get_db_cursor()
-		c.execute("BEGIN TRANSACTION");
+		#c.execute("BEGIN TRANSACTION");
 		for i in range(len(ids)):
 			ret = c.execute(sql_cmd.format(labels[i], ids[i]));
 			#print(sql_cmd.format(labels[i], ids[i]))
-		c.execute("END TRANSACTION");
+		#c.execute("END TRANSACTION");
 
 	def get_cluster_input_data(self):
 		'''Fetch formated data and ids to be used in clustering algorithm'''
@@ -163,7 +163,7 @@ class storage():
 		# Get usefull data from sql request:
 		# Skip the id and group the real vaules, 
 		# Convert blob data to list and get just the first 3 transients
-		data = [list(i[1:-1]) + list(fromstring(i[-1])[0:3]) for i in info]
+		data = [list(i[1:-1]) + list(frombuffer(i[-1])[0:3]) for i in info]
 		return (ids, data); 
 
 	def calculate_cluster(self):

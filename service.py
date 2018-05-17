@@ -43,9 +43,11 @@ def add_sensor_record():
 	Return: OK
 	'''
 	try:
-		data = json.loads(request.data);
+		data = json.loads(request.data.decode('utf-8'));
 	except json.decoder.JSONDecodeError:
 		return 'Wrong Json request', 400
+	except typeError:
+		return 'Json string must be utf-8', 400
 
 	if 'record' in data.keys():
 		data_dict = backend.validate_sensor_data(data['record']);
