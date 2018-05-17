@@ -62,7 +62,6 @@ def validate_sensor_data(data_str):
 
 class storage():
 	def __init__(self, app):
-		self.is_db_open = False;
 		self.app = app;
 	
 	def init_db(self):
@@ -90,10 +89,12 @@ class storage():
 
 	def get_db_cursor(self):
 		''' Return a cursor to the configured, open Database if necessary'''
-		if not self.is_db_open:
+		try:
+			self.conn.cursor()
+		except sqlite3.ProgrammingError:
+			print('Opening Database', self.app.config['DATABASE'])
 			self.conn = sqlite3.connect(self.app.config['DATABASE']);
-			self.is_db_open = True;
-		return self.conn.cursor()
+		return self.conn.cursor();
 
 	def record_sensor_info(self, D):
 		''' Insert sensor record into database
@@ -129,7 +130,7 @@ class storage():
 		LIMIT 1000" % (type_s)
 		ret = c.execute(sql_cmd).fetchall();
 		if type_s in ['Peaks', 'FFT']:
-			data = [fromstring(i[0]) for i in ret]
+			data = [frombuffer(i[0]) for i in ret]
 		else:
 			data = [i[0] for i in ret]
 		return data;
