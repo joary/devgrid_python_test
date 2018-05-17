@@ -13,18 +13,22 @@ Install requirements:
 pip install -r requirements.txt
 ```
 
+Run unit test:
+```
+python ./unit_test.py
+```
+
+Setup database:
 ```
 ./initdb.sh
 ```
 
+Run service:
 ```
 ./run.sh
 ```
 
-#
-
-# Run unit tests
-
+Generate events with curl
 ```
-python ./unit_test.py
+bash ./events.sh
 ```
