@@ -2,7 +2,6 @@ import sqlite3, re, os
 from numpy import array, fromstring, mean
 from datetime import datetime
 from sklearn.cluster import MeanShift, estimate_bandwidth
-# TODO tratar os erros
 
 def validate_sensor_data(data_str):
 	''' Validate and parse the sensor data from string
@@ -63,6 +62,7 @@ def validate_sensor_data(data_str):
 class storage():
 	def __init__(self, app):
 		self.app = app;
+		self.conn = sqlite3.connect(self.app.config['DATABASE']);
 	
 	def init_db(self):
 		''' Function to create and initialize database
