@@ -11,14 +11,6 @@ def initdb():
 	S.init_db();
 	print('Database Initialized')
 
-@app.route("/")
-def hello():
-	return 404
-
-@app.route("/api/")
-def default_api():
-		return 404
-
 @app.route("/api/statistics/", methods=["GET"])
 def get_statistics():
 	n_clusters = 5;#S.get_n_clusters();
@@ -32,14 +24,22 @@ def get_statistics():
 
 @app.route("/api/add_sensor_record/", methods=["POST"])
 def add_sensor_record():
+	''' Insert a new record into database '''
+	try:
 		data = json.loads(request.data);
-		if 'record' in data.keys():
-			data_dict = backend.validate_sensor_data(data['record']);
-			S.record_sensor_info(data_dict);
-			n_recs = S.get_n_records()
-			if (n_recs % 1000 == 0 and n_recs != 0):
-				S.calculate_cluster()
-		else:
-			return 'Malformed Packet: Request json must have a record field'
+	except json.decoder.JSONDecodeError:
+		return 'Wrong Json request', 400
 
-		return 'OK\n'
+	if 'record' in data.keys():
+		data_dict = backend.validate_sensor_data(data['record']);
+		if(data_dict == -2):
+			return 'wrong sensor data information', 400
+
+		S.record_sensor_info(data_dict);
+		n_recs = S.get_n_records()
+		if (n_recs % 1000 == 0 and n_recs != 0):
+			S.calculate_cluster()
+	else:
+		return 'json must have a record field', 400
+
+	return 'OK', 200

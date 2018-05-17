@@ -5,18 +5,28 @@ from sklearn.cluster import MeanShift, estimate_bandwidth
 # TODO tratar os erros
 
 def validate_sensor_data(data_str):
+	''' Validate and parse the sensor data from string
+	Input: string with sensor information
+	Output: 
+		On success: dictionary with parsed sensor information
+		On error:
+			-2 when sensor information is not valid'''
 	# Divide data by type of information
 	classes_regex = '(Device|Alarms|Power|Line|Peaks|FFT Re|FFT Img|UTC Time|hz|WiFi Strength|Dummy):';
 	classes = re.split(classes_regex, data_str);
-	device_info = classes[2].split(';')  # [ID=.., Fw=.., Evt=...]
-	alarms_info = classes[4].split(';')  # [CoilRevesed=...]
-	power_info  = classes[6].split(';')  # [Active=.. , Reactive=.., Appearent=..]
-	line_info   = classes[8].split(';')  # [Current=.. , Voltage=.., Phase=..]
-	peaks_info  = classes[10].split(';') # [.., .., ]
-	fft_re_info = classes[12].split(';')
-	fft_im_info = classes[14].split(';')
-	utc_time    = classes[16].split(';')
-	hz          = classes[18].split(';')
+	try:
+		device_info = classes[2].split(';')  # [ID=.., Fw=.., Evt=...]
+		alarms_info = classes[4].split(';')  # [CoilRevesed=...]
+		power_info  = classes[6].split(';')  # [Active=.. , Reactive=.., Appearent=..]
+		line_info   = classes[8].split(';')  # [Current=.. , Voltage=.., Phase=..]
+		peaks_info  = classes[10].split(';') # [.., .., ]
+		fft_re_info = classes[12].split(';')
+		fft_im_info = classes[14].split(';')
+		utc_time    = classes[16].split(';')
+		hz          = classes[18].split(';')
+	except IndexError:
+		# If some information is missing signalize it
+		return -2;
 	
 	# Recreate the FFT complex data
 	# Avoid the last sample since it is an empty string
@@ -50,7 +60,7 @@ class storage():
 		This functino should run only once at the service deployment'''
 		self.conn = sqlite3.connect(self.app.config['DATABASE'])
 		c = self.conn.cursor()
-		c.execute('''DROP TABLE sensor_data''');
+		c.execute('''DROP TABLE IF EXISTS sensor_data ''');
 		c.execute('''CREATE TABLE sensor_data (\
 			devid INTEGER, \
 			PowerActive REAL, \
