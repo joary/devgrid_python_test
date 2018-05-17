@@ -24,29 +24,40 @@ def validate_sensor_data(data_str):
 		fft_im_info = classes[14].split(';')
 		utc_time    = classes[16].split(';')
 		hz          = classes[18].split(';')
+		
+		# Recreate the FFT complex data
+		# Avoid the last sample since it is an empty string
+		fft_re = array([float(i) for i in fft_re_info[:-1]]); 
+		fft_im = array([float(i) for i in fft_im_info[:-1]]);
+		fft_c = fft_re + 1j*fft_im;
+		
+		# Get just the usefull information for this application
+		devid          = int(device_info[0].split('=')[1])
+		active_power   = float(power_info[0].split('=')[1].replace('W',''))
+		reactive_power = float(power_info[1].split('=')[1].replace('var',''))
+		appearent_power= float(power_info[2].split('=')[1].replace('VA',''))
+		current_line   = float(line_info[0].split('=')[1])
+		voltage_line   = float(line_info[1].split('=')[1].replace('V',''))
+		phase_line     = float(line_info[2].split('=')[1].replace('rad','').replace(',','.'))
+		peaks          = array([float(i) for i in peaks_info[:-1]])
+		freq           = float(hz[0].split(';')[0])
+		fft            = array(fft_c)
 	except IndexError:
 		# If some information is missing signalize it
 		return -2;
-	
-	# Recreate the FFT complex data
-	# Avoid the last sample since it is an empty string
-	fft_re = array([float(i) for i in fft_re_info[:-1]]); 
-	fft_im = array([float(i) for i in fft_im_info[:-1]]);
-	fft_c = fft_re + 1j*fft_im;
-	
-	# Get just the usefull information for this application
-	
-	ret = {};
-	ret.update({'devid'          : int(device_info[0].split('=')[1])})
-	ret.update({'active_power'   : float(power_info[0].split('=')[1].replace('W',''))})
-	ret.update({'reactive_power' : float(power_info[1].split('=')[1].replace('var',''))})
-	ret.update({'appearent_power': float(power_info[2].split('=')[1].replace('VA',''))})
-	ret.update({'current_line'   : float(line_info[0].split('=')[1])})
-	ret.update({'voltage_line'   : float(line_info[1].split('=')[1].replace('V',''))})
-	ret.update({'phase_line'     : float(line_info[2].split('=')[1].replace('rad','').replace(',','.'))})
-	ret.update({'peaks'          : array([float(i) for i in peaks_info[:-1]])})
-	ret.update({'freq'           : float(hz[0].split(';')[0])})
-	ret.update({'fft'            : array(fft_c)})
+
+	ret = {
+	'devid'          : devid          , 
+	'active_power'   : active_power   , 
+	'reactive_power' : reactive_power , 
+	'appearent_power': appearent_power, 
+	'current_line'   : current_line   , 
+	'voltage_line'   : voltage_line   , 
+	'phase_line'     : phase_line     , 
+	'peaks'          : peaks          , 
+	'freq'           : freq           , 
+	'fft'            : fft            };
+
 	return ret;
 
 class storage():
