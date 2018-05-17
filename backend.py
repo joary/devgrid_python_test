@@ -51,8 +51,7 @@ def validate_sensor_data(data_str):
 
 class storage():
 	def __init__(self, app):
-		self.record_cnt = 0;
-		self.id_db_open = False;
+		self.is_db_open = False;
 		self.app = app;
 	
 	def init_db(self):
@@ -79,13 +78,15 @@ class storage():
 		self.conn.close()
 
 	def get_db_cursor(self):
-		''' Return a cursor to the configured'''
-		if not self.id_db_open:
+		''' Return a cursor to the configured, open Database if necessary'''
+		if not self.is_db_open:
 			self.conn = sqlite3.connect(self.app.config['DATABASE']);
 			self.is_db_open = True;
 		return self.conn.cursor()
 
 	def record_sensor_info(self, D):
+		''' Insert sensor record into database
+		Input: D, Dictionary containing sensor information validated through validate_sensor_data()'''
 		c = self.get_db_cursor()
 		sql_cmd = "INSERT INTO sensor_data ( \
 			devid, PowerActive, PowerReactive, PowerAppearent, LineCurrent,\
@@ -99,12 +100,19 @@ class storage():
 			D['appearent_power'], D['current_line'], D['voltage_line'], D['phase_line'],
 			peaks, fft_c, D['freq'], ts));
 		self.conn.commit()
-		self.record_cnt += 1;
 		
 	def get_n_records(self):
-		return self.record_cnt;
+		''' Get the number of entries on sensor records '''
+		# Also Update entry counter info
+		sql_cmd = "SELECT COUNT(*) FROM sensor_data";
+		c = self.get_db_cursor();
+		record_cnt = c.execute(sql_cmd).fetchone()[0]
+		return record_cnt;
 
 	def get_sensor_data(self, type_s):
+		''' Return the collum type_s of the latest 1000 rows
+		INPUT type_s name of the collum to Return
+		OUTPUT vector with collum data'''
 		c = self.get_db_cursor()
 		sql_cmd = "SELECT %s from sensor_data ORDER BY InsertTimestamp DESC \
 		LIMIT 1000" % (type_s)
@@ -116,6 +124,9 @@ class storage():
 		return data;
 	
 	def set_meas_labels(self, ids, labels):
+		'''Update labels of rows with given ROWIDs
+		INPUT: ids vector with ROWIDs of items to be updated
+			labels label number of each item'''
 		if(len(ids) != len(labels)):
 			print("Id and label vector must have the same length")
 			return -1;
@@ -129,6 +140,7 @@ class storage():
 		c.execute("END TRANSACTION");
 
 	def get_cluster_input_data(self):
+		'''Fetch formated data and ids to be used in clustering algorithm'''
 		sql_cmd = "SELECT rowid, PowerActive, PowerReactive, PowerAppearent, \
 			LineCurrent, LineVoltage, Peaks \
 			FROM sensor_data ORDER BY InsertTimestamp DESC LIMIT 1000"
@@ -143,6 +155,7 @@ class storage():
 		return (ids, data); 
 
 	def calculate_cluster(self):
+		''' Execute MeanShift clustering algorihm with latest 1000 records '''
 		(ids, data) = self.get_cluster_input_data();
 		
 		bandwidth = estimate_bandwidth(data, quantile=0.2, n_samples=200)
@@ -154,11 +167,17 @@ class storage():
 		return (ids, labels)
 		
 	def get_n_events_in_cluster(self, cluster):
+		''' Get the number of events of a given cluster label 
+		INPUT cluster the cluster label number
+		OUTPUT number of records in cluster'''
 		c = self.get_db_cursor()
 		sql_cmd = "SELECT COUNT(*) FROM sensor_data WHERE Label={}".format(cluster);
 		return c.execute(sql_cmd).fetchone()[0]
 
 	def get_cluster_active_power_average(self, cluster):
+		''' Get the active power average from a given cluster label
+		INPUT cluster the cluster label number
+		OUTPUT active power average of cluster records'''
 		c = self.get_db_cursor()
 		sql_cmd = "SELECT PowerActive FROM sensor_data WHERE Label={}".format(cluster);
 		power = c.execute(sql_cmd).fetchall();
